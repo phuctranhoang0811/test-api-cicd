@@ -1,0 +1,232 @@
+name: Working CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch: # Manual trigger
+
+# Set permissions for the entire workflow
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🏗️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18.x"
+          cache: "npm"
+
+      - name: 📦 Install dependencies
+        run: npm ci
+
+      - name: 🧪 Run API tests
+        run: npm test
+
+      - name: 📊 Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: output/
+          retention-days: 30
+
+  deploy:
+    name: Deploy Reports
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🏗️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18.x"
+          cache: "npm"
+
+      - name: 📦 Install dependencies
+        run: npm ci
+
+      - name: 🧪 Generate test reports
+        run: npm test
+        continue-on-error: true
+
+      - name: 📁 Create public directory
+        run: mkdir -p public
+
+      - name: 📝 Generate report page
+        run: |
+          cat > public/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>API Test Dashboard</title>
+              <style>
+                  * { box-sizing: border-box; margin: 0; padding: 0; }
+                  body { 
+                      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      min-height: 100vh;
+                      padding: 20px;
+                  }
+                  .container {
+                      max-width: 1200px;
+                      margin: 0 auto;
+                      background: white;
+                      border-radius: 16px;
+                      box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+                      overflow: hidden;
+                  }
+                  .header {
+                      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+                      color: white;
+                      padding: 40px;
+                      text-align: center;
+                  }
+                  .header h1 { font-size: 2.5rem; margin-bottom: 10px; }
+                  .header p { opacity: 0.9; font-size: 1.1rem; }
+                  .content { padding: 40px; }
+                  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+                  .card {
+                      background: #f8f9fa;
+                      border-radius: 12px;
+                      padding: 24px;
+                      border-left: 4px solid #28a745;
+                      transition: transform 0.2s;
+                  }
+                  .card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.1); }
+                  .card h3 { color: #2d3748; margin-bottom: 12px; font-size: 1.25rem; }
+                  .card ul { list-style: none; }
+                  .card li { 
+                      padding: 8px 0; 
+                      border-bottom: 1px solid #e2e8f0; 
+                      display: flex;
+                      align-items: center;
+                  }
+                  .card li:last-child { border-bottom: none; }
+                  .status { 
+                      display: inline-block; 
+                      width: 10px; 
+                      height: 10px; 
+                      border-radius: 50%; 
+                      background: #28a745; 
+                      margin-right: 10px; 
+                  }
+                  .info-grid { margin-top: 20px; }
+                  .info-item { 
+                      background: white; 
+                      border: 1px solid #e2e8f0; 
+                      border-radius: 8px; 
+                      padding: 16px; 
+                  }
+                  .info-item strong { color: #4a5568; }
+                  .links { margin-top: 30px; text-align: center; }
+                  .btn {
+                      display: inline-block;
+                      padding: 12px 24px;
+                      background: #4facfe;
+                      color: white;
+                      text-decoration: none;
+                      border-radius: 8px;
+                      margin: 0 10px;
+                      transition: background 0.2s;
+                  }
+                  .btn:hover { background: #3b82f6; }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <div class="header">
+                      <h1>🧪 API Test Dashboard</h1>
+                      <p>CodeceptJS API Testing Pipeline</p>
+                  </div>
+                  
+                  <div class="content">
+                      <div class="grid">
+                          <div class="card">
+                              <h3>✅ Test Suite Status</h3>
+                              <ul>
+                                  <li><span class="status"></span>GET /products - List all products</li>
+                                  <li><span class="status"></span>GET /products/1 - Get single product</li>
+                                  <li><span class="status"></span>POST /products/add - Create product</li>
+                                  <li><span class="status"></span>PUT /products/1 - Update product</li>
+                                  <li><span class="status"></span>DELETE /products/1 - Delete product</li>
+                              </ul>
+                          </div>
+                          
+                          <div class="card">
+                              <h3>📊 Pipeline Info</h3>
+                              <ul>
+                                  <li><strong>Repository:</strong> ${{ github.repository }}</li>
+                                  <li><strong>Branch:</strong> ${{ github.ref_name }}</li>
+                                  <li><strong>Workflow:</strong> ${{ github.workflow }}</li>
+                                  <li><strong>Run ID:</strong> ${{ github.run_id }}</li>
+                              </ul>
+                          </div>
+                      </div>
+                      
+                      <div class="info-grid grid">
+                          <div class="info-item">
+                              <strong>Last Updated:</strong><br>
+                              ${{ github.event.head_commit.timestamp }}
+                          </div>
+                          <div class="info-item">
+                              <strong>Commit SHA:</strong><br>
+                              <code>${{ github.sha }}</code>
+                          </div>
+                          <div class="info-item">
+                              <strong>Triggered by:</strong><br>
+                              ${{ github.actor }}
+                          </div>
+                      </div>
+                      
+                      <div class="links">
+                          <a href="https://github.com/${{ github.repository }}/actions" class="btn">🚀 View Actions</a>
+                          <a href="https://dummyjson.com/docs/products" class="btn">📖 API Docs</a>
+                          <a href="https://github.com/${{ github.repository }}" class="btn">📁 Source Code</a>
+                      </div>
+                  </div>
+              </div>
+          </body>
+          </html>
+          EOF
+
+      - name: 📂 Copy test outputs
+        run: |
+          if [ -d "output" ]; then
+            cp -r output/* public/ 2>/dev/null || echo "No output files found"
+          fi
+          echo "Public directory contents:"
+          ls -la public/
+
+      - name: ⚙️ Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: 📤 Upload artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: "./public"
+
+      - name: 🚀 Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

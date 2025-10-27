@@ -12,13 +12,9 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@codeceptjs/allure-legacy": "^1.0.2",
     "@codeceptjs/configure": "^1.0.6",
     "axios": "^1.12.2",
     "chai": "^6.2.0",
     "codeceptjs": "^3.7.5"
-  },
-  "devDependencies": {
-    "allure-commandline": "^2.24.1"
   }
 }
