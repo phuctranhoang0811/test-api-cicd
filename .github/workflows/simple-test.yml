@@ -1,0 +1,41 @@
+name: Simple Test
+
+on:
+  workflow_dispatch: # Cho phép trigger thủ công
+  push:
+    branches: [main]
+
+jobs:
+  simple-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18.x'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Run tests
+        run: npm test
+        
+      - name: Show results
+        run: |
+          echo "✅ Tests completed successfully!"
+          echo "📊 Test files processed"
+          ls -la
+          
+      - name: Check output
+        run: |
+          if [ -d "output" ]; then
+            echo "Output directory exists:"
+            ls -la output/
+          else
+            echo "No output directory found"
+          fi

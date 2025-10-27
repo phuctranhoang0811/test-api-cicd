@@ -1,0 +1,11 @@
+# Script để connect với GitHub
+# Thay YOUR_USERNAME và YOUR_REPOSITORY bằng thông tin thực của bạn
+
+# Thêm remote origin
+git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPOSITORY.git
+
+# Đổi branch name thành main (GitHub standard)
+git branch -M main
+
+# Push lên GitHub
+git push -u origin main

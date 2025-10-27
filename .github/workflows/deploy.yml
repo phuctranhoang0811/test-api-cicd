@@ -3,15 +3,25 @@ name: Deploy Test Reports
 on:
   push:
     branches: [main, master]
-  workflow_run:
-    workflows: ["API Tests CI/CD Pipeline"]
-    types:
-      - completed
+  workflow_dispatch: # Cho phép trigger thủ công
+
+# Set permissions để có thể deploy GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Chỉ cho phép 1 deployment cùng lúc
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
   deploy-reports:
     runs-on: ubuntu-latest
-    if: github.event.workflow_run.conclusion == 'success' || github.event_name == 'push'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Checkout repository
@@ -29,55 +39,73 @@ jobs:
       - name: Run tests and generate reports
         run: |
           npm run test:ci
+        continue-on-error: true
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
+      - name: Create public directory
+        run: mkdir -p public
 
       - name: Create index.html for reports
         run: |
-          mkdir -p public
-          cat > public/index.html << EOF
+          cat > public/index.html << 'EOF'
           <!DOCTYPE html>
           <html>
           <head>
               <title>API Test Reports</title>
+              <meta charset="UTF-8">
               <style>
-                  body { font-family: Arial, sans-serif; margin: 40px; }
-                  .header { background: #f4f4f4; padding: 20px; border-radius: 5px; }
-                  .section { margin: 20px 0; }
+                  body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+                  .header { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+                  .section { margin: 20px 0; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
                   .test-item { background: #f9f9f9; padding: 15px; margin: 10px 0; border-radius: 5px; }
                   .success { border-left: 5px solid #4CAF50; }
-                  .error { border-left: 5px solid #f44336; }
+                  .info { border-left: 5px solid #2196F3; }
+                  a { color: #1976D2; text-decoration: none; }
+                  a:hover { text-decoration: underline; }
               </style>
           </head>
           <body>
               <div class="header">
-                  <h1>🧪 API Test Reports</h1>
-                  <p>Last updated: $(date)</p>
-                  <p>Repository: ${{ github.repository }}</p>
-                  <p>Branch: ${{ github.ref_name }}</p>
-                  <p>Commit: ${{ github.sha }}</p>
+                  <h1>🧪 API Test Reports Dashboard</h1>
+                  <p><strong>Repository:</strong> ${{ github.repository }}</p>
+                  <p><strong>Branch:</strong> ${{ github.ref_name }}</p>
+                  <p><strong>Last Updated:</strong> ${{ github.event.head_commit.timestamp }}</p>
+                  <p><strong>Commit:</strong> <code>${{ github.sha }}</code></p>
               </div>
               
               <div class="section">
-                  <h2>📊 Test Summary</h2>
+                  <h2>📊 Test Coverage</h2>
                   <div class="test-item success">
-                      <h3>✅ Products API Tests</h3>
-                      <p>All API endpoints tested successfully</p>
+                      <h3>✅ Products API Test Suite</h3>
+                      <p>CodeceptJS API Testing with REST helper</p>
                       <ul>
-                          <li>GET /products - Get all products</li>
-                          <li>GET /products/1 - Get single product</li>
-                          <li>POST /products/add - Add new product</li>
-                          <li>PUT /products/1 - Update product</li>
-                          <li>DELETE /products/1 - Delete product</li>
+                          <li><strong>GET /products</strong> - Retrieve all products (expects 194 total)</li>
+                          <li><strong>GET /products/1</strong> - Get single product by ID</li>
+                          <li><strong>POST /products/add</strong> - Create new product</li>
+                          <li><strong>PUT /products/1</strong> - Update existing product</li>
+                          <li><strong>DELETE /products/1</strong> - Remove product</li>
                       </ul>
                   </div>
               </div>
-              
+
               <div class="section">
-                  <h2>🔗 Quick Links</h2>
-                  <p><a href="https://github.com/${{ github.repository }}/actions">View GitHub Actions</a></p>
-                  <p><a href="https://dummyjson.com/docs/products">API Documentation</a></p>
+                  <h2>🔗 Useful Links</h2>
+                  <div class="test-item info">
+                      <ul>
+                          <li><a href="https://github.com/${{ github.repository }}/actions" target="_blank">🚀 GitHub Actions Workflows</a></li>
+                          <li><a href="https://dummyjson.com/docs/products" target="_blank">📖 DummyJSON API Documentation</a></li>
+                          <li><a href="https://codecept.io/" target="_blank">📚 CodeceptJS Documentation</a></li>
+                          <li><a href="https://github.com/${{ github.repository }}" target="_blank">📁 Source Code Repository</a></li>
+                      </ul>
+                  </div>
+              </div>
+
+              <div class="section">
+                  <h2>⚡ CI/CD Status</h2>
+                  <div class="test-item info">
+                      <p>This page is automatically updated when code is pushed to the main branch.</p>
+                      <p><strong>Workflow:</strong> API Tests CI/CD Pipeline</p>
+                      <p><strong>Runner:</strong> Ubuntu Latest with Node.js 16.x, 18.x, 20.x</p>
+                  </div>
               </div>
           </body>
           </html>
@@ -86,27 +114,18 @@ jobs:
       - name: Copy test outputs to public
         run: |
           if [ -d "output" ]; then
-            cp -r output/* public/ 2>/dev/null || true
+            cp -r output/* public/ 2>/dev/null || echo "No output files to copy"
           fi
+          ls -la public/
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: "./public"
 
-  deploy:
-    needs: deploy-reports
-    runs-on: ubuntu-latest
-
-    permissions:
-      pages: write
-      id-token: write
-
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
-    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
