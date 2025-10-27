@@ -1,0 +1,80 @@
+name: API Tests CI/CD Pipeline
+
+# Trigger workflow on push và pull requests
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master]
+
+  # Cho phép trigger thủ công
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [16.x, 18.x, 20.x]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create output directory
+        run: mkdir -p output
+
+      - name: Run API tests
+        run: npm run test:ci
+        continue-on-error: false
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-node-${{ matrix.node-version }}
+          path: output/
+          retention-days: 30
+
+      - name: Upload test reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-reports-node-${{ matrix.node-version }}
+          path: |
+            output/*.xml
+            output/*.json
+            output/*.html
+          retention-days: 30
+
+  notify:
+    needs: test
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Test Results Summary
+        run: |
+          echo "🧪 API Tests completed!"
+          echo "✅ Check the test results in the artifacts section"
+
+      - name: Notify on failure
+        if: needs.test.result == 'failure'
+        run: |
+          echo "❌ Tests failed! Please check the logs."
+          exit 1
+
+      - name: Notify on success
+        if: needs.test.result == 'success'
+        run: |
+          echo "✅ All tests passed successfully!"
